@@ -1,1 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bell Ringer with Solana Donation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #bellImage {
+            width: 100px;
+            height: 100px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        #bellImage:hover {
+            transform: scale(1.1);
+        }
+        #volumeControl, #connectButton, #walletStatus, #donateButton {
+            margin-top: 20px;
+        }
+        #volumeSlider {
+            margin-left: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.73.0/solanaWeb3.min.js"></script>
+    <script src="https://unpkg.com/@solana/wallet-adapter-base"></script>
+    <script src="https://unpkg.com/@solana/wallet-adapter-wallets"></script>
+    <script src="https://unpkg.com/@solana/wallet-adapter-phantom"></script>
+</head>
+<body>
+    <svg id="bellImage" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 3V5M19.0711 7.92893L17.6569 9.34315M5 13H3M21 13H19M6.34315 9.34315L4.92893 7.92893M12 21C13.6569 21 15 19.6569 15 18H9C9 19.6569 10.3431 21 12 21ZM12 21V18M18 13C18 9.68629 15.3137 7 12 7C8.68629 7 6 9.68629 6 13C6 15.2208 7.21065 16.1599 8.33741 17.0741C9.45139 17.9797 10.5 18.8641 10.5 20H13.5C13.5 18.8641 14.5486 17.9797 15.6626 17.0741C16.7893 16.1599 18 15.2208 18 13Z" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
 
+    <div id="volumeControl">
+        <label for="volumeSlider">Volume:</label>
+        <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.5">
+    </div>
+
+    <button id="connectButton">Connect Wallet</button>
+    <div id="walletStatus">Wallet not connected</div>
+    <button id="donateButton" style="display: none;">Donate 0.1 SOL</button>
+
+    <audio id="bellSound" src="bell.mp3"></audio>
+
+    <script>
+        const bellImage = document.getElementById('bellImage');
+        const bellSound = document.getElementById('bellSound');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const connectButton = document.getElementById('connectButton');
+        const walletStatus = document.getElementById('walletStatus');
+        const donateButton = document.getElementById('donateButton');
+
+        let wallet;
+        let connection;
+
+        // Replace this with your actual donation wallet address
+        const DONATION_ADDRESS = 'Enter_Your_Solana_Wallet_Address_Here';
+
+        bellImage.addEventListener('click', () => {
+            bellSound.currentTime = 0;
+            bellSound.play();
+            bellImage.style.transform = 'scale(1.2)';
+            setTimeout(() => {
+                bellImage.style.transform = 'scale(1)';
+            }, 200);
+        });
+
+        volumeSlider.addEventListener('input', (e) => {
+            bellSound.volume = e.target.value;
+        });
+
+        bellSound.volume = volumeSlider.value;
+
+        async function connectWallet() {
+            try {
+                const { PhantomWalletAdapter } = window.solanaWalletAdapterWallets;
+                wallet = new PhantomWalletAdapter();
+                await wallet.connect();
+                
+                const publicKey = wallet.publicKey.toString();
+                walletStatus.textContent = `Connected: ${publicKey.slice(0, 4)}...${publicKey.slice(-4)}`;
+                connectButton.textContent = 'Disconnect';
+                donateButton.style.display = 'block';
+                
+                connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('devnet'), 'confirmed');
+                console.log('Connected to Solana');
+            } catch (err) {
+                console.error('Failed to connect wallet', err);
+                walletStatus.textContent = 'Failed to connect wallet';
+            }
+        }
+
+        async function disconnectWallet() {
+            if (wallet) {
+                await wallet.disconnect();
+                wallet = null;
+                connection = null;
+                walletStatus.textContent = 'Wallet not connected';
+                connectButton.textContent = 'Connect Wallet';
+                donateButton.style.display = 'none';
+                console.log('Disconnected from Solana');
+            }
+        }
+
+        async function donate() {
+            if (!wallet || !connection) {
+                alert('Please connect your wallet first.');
+                return;
+            }
+
+            try {
+                const transaction = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: wallet.publicKey,
+                        toPubkey: new solanaWeb3.PublicKey(DONATION_ADDRESS),
+                        lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.1 // 0.1 SOL
+                    })
+                );
+
+                const signature = await wallet.sendTransaction(transaction, connection);
+                const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+
+                if (confirmation.value.err) {
+                    throw new Error('Transaction failed');
+                }
+
+                alert('Thank you for your donation of 0.1 SOL!');
+                console.log('Transaction confirmed. Signature:', signature);
+            } catch (err) {
+                console.error('Donation failed', err);
+                alert('Donation failed. Please try again.');
+            }
+        }
+
+        connectButton.addEventListener('click', async () => {
+            if (wallet) {
+                await disconnectWallet();
+            } else {
+                await connectWallet();
+            }
+        });
+
+        donateButton.addEventListener('click', donate);
+    </script>
+</body>
+</html>
